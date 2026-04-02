@@ -1,0 +1,111 @@
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("My Tools")
+    .addItem("Run Mapping Script", "appendMappedValuesToDestination")
+    .addToUi();
+}
+
+
+
+function appendMappedValuesToDestination() {
+  const ss1 = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1AoAhWbjoFkGbA-mrQXBFhQfK986cwXeTnkwzi3LuOq8/edit");
+  const ss2 = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1xPbZuQ_O9FO5z71PxgnlZxAeXK6ua44mkqRsWoGk154/edit");
+
+  const sourceSh = ss1.getSheetByName("Summary");
+  const destSh = ss2.getSheetByName("Copy of FL - Links At Pinebrook");
+
+  const SOURCE_START_ROW = 1;
+  const SOURCE_KEY_COL = 16;   // P
+  const SOURCE_VALUE_COL = 17; // O
+  const DEST_HEADER_ROW = 1;
+
+  SpreadsheetApp.flush();
+
+  const lastSourceRow = sourceSh.getLastRow();
+  const lastDestCol = destSh.getLastColumn();
+
+  // ===== GET BUDGET NAME =====
+  const budgetName = sourceSh.getRange("B2").getDisplayValue();
+  const OpportunityID = sourceSh.getRange("F2").getDisplayValue();
+
+  // ===== READ SOURCE KEYS + VALUES =====
+  const sourceKeys = sourceSh.getRange(SOURCE_START_ROW, SOURCE_KEY_COL, lastSourceRow, 1).getDisplayValues();
+  const sourceValues = sourceSh.getRange(SOURCE_START_ROW, SOURCE_VALUE_COL, lastSourceRow, 1).getDisplayValues();
+
+  const sourceMap = {};
+  for (let i = 0; i < lastSourceRow; i++) {
+    const key = String(sourceKeys[i][0] || '').trim();
+    const value = sourceValues[i][0];
+    if (!key) continue;
+    sourceMap[key] = value;
+  }
+
+  // ===== DESTINATION HEADERS =====
+  const destHeaders = destSh.getRange(DEST_HEADER_ROW, 1, 1, lastDestCol).getDisplayValues()[0];
+
+  // ===== KEY → HEADER MAPPING =====
+  const keyToHeaderMap = {
+    "Fiber Build": "OSP Fiber Build Total Cost",
+    "OSP to Property Headend": "OSP to Property Headend Total Cost",
+    "Circuit NRC": "Circuit Total Cost",
+    "Plant Labor": "Plant Labor Total Cost",
+    "Plant Material": "Plant Material Total Cost",
+    "Analog": "Analog",
+    "Headend/Misc": "Headend Build & Install Total Cost",
+    "MDF & Property Router": "MDF & Property Router Total Cost",
+    "GPON Switches": "PON System Total Cost",
+    "Wifi/Common Area": "CA - Wireless AP Total Cost",
+    "Router Allocation": "Core Network Allocation Total Cost",
+    "Managed Enterprise WiFi": "Managed Enterprise WiFi",
+    "Capital Contribution": "Capital Contribution",
+    "Project Manager Fee": "Project Manager Fee",
+    "Cameras": "Cameras",
+    "Security": "Security",
+    "In Unit - Install": "In-Unit Install Total Cost",
+    "In Unit - Wiring": "In-Unit Wiring Total Cost",
+    "Other": "Other",
+    "Sales Rentals": "Sales Rentals Total Cost",
+    "Construction Rentals": "Construction Rentals Total Cost",
+    "Public Safety": "Public Safety",
+    "Damage Allocation": "Damage Allocation",
+    "Wiring Fee Paid to Developer": "Wiring Fee Paid to Developer",
+    "Total:": "Total:",
+    "Total Delta:": "Total Delta:"
+  };
+
+  // ===== BUILD OUTPUT ROW =====
+  const outputRow = new Array(lastDestCol).fill("");
+
+  // Map all cost values
+  for (const [sourceKey, destHeader] of Object.entries(keyToHeaderMap)) {
+    const value = sourceMap[sourceKey];
+    if (value === undefined) continue;
+
+    const colIndex = destHeaders.findIndex(h => String(h).trim() === destHeader);
+    if (colIndex !== -1) {
+      outputRow[colIndex] = value;
+    } else {
+      Logger.log("Missing header: " + destHeader);
+    }
+  }
+
+  // ===== SET BUDGET NAME =====
+  const budgetColIndex = destHeaders.findIndex(h => String(h).trim() === "Budget Name");
+  if (budgetColIndex !== -1) {
+    outputRow[budgetColIndex] = budgetName;
+  } else {
+    Logger.log("Budget Name column not found");
+  }
+  // ===== SET BUDGET NAME =====
+  const OpportunityIDIndex = destHeaders.findIndex(h => String(h).trim() === "Opportunity ID");
+  if (OpportunityIDIndex !== -1) {
+    outputRow[OpportunityIDIndex] = OpportunityID;
+  } else {
+    Logger.log("Budget Name column not found");
+  }
+  // ===== APPEND ROW =====
+  const nextRow = destSh.getLastRow() + 1;
+  destSh.getRange(nextRow, 1, 1, outputRow.length).setValues([outputRow]);
+
+  Logger.log("Row appended at: " + nextRow);
+}
